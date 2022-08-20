@@ -1,4 +1,4 @@
-# DLDH-Metaphor-detection
+# Metaphor-detection
 
 Metaphor detection
 
