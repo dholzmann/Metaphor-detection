@@ -22,3 +22,5 @@ logs/*
 intermediate-task
 intermediate-task-trofi
 soft-labels
+/intermediate-task-vua/
+/data/
