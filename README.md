@@ -1,9 +1,8 @@
 # DLDH-Metaphor-detection
 
-Deep learning for metaphor detection
+Metaphor detection
 
-Supervisor: Dr. rer. pol. Steffen Eger - TU Darmstadt
+Supervisor: Dr. rer. pol. Steffen Eger
 
-![Logo](https://assets.ltkcontent.com/images/11687/analogy-metaphor-simile_0066f46bde.jpg)
-
-For data preprocessing and training models, access to the following Google Drive is required: https://drive.google.com/drive/folders/1uPnLexQh8kbV5ErVR7ksagVKP_wDd4a0?usp=sharing
+For the data set, see https://github.com/3093453/DL4NLP. In order to train the model, the data has to be downloaded into the data directory configured in the config.py file.
+Training the models is done in test.py. 

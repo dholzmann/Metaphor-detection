@@ -1,52 +1,21 @@
 # coding=latin-1
-import datetime
-import re
-import os
-import csv
-import ast
-import math
-import copy
-import glob
-import json
-import deepl
-import random
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import transformers
-
-from sklearn.linear_model import LinearRegression, Lasso
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
-from sklearn.metrics import accuracy_score, f1_score, log_loss, classification_report, precision_score, recall_score
-
-from statsmodels.tsa.stattools import adfuller, acf, pacf
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.tsa.arima_model import ARIMA
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
-
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from transformers.models.bert.modeling_bert import *
-from transformers.modeling_outputs import SequenceClassifierOutput
-from transformers.utils.dummy_tf_objects import TFDPRQuestionEncoder
-from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer, BertForSequenceClassification, \
-    BertModel, Trainer, TrainingArguments, DataCollatorWithPadding
-
-#import models
-from models import Task, TaskType, Model, load_model_tokenizer, MultiTaskModelBERT
+from transformers import Trainer, TrainingArguments
+from models import TaskType, Model, MultiTaskModelBERT
 from dataset import MetaphorDataset, load_dataset
 import utils
-import dataset
-from config import ROOT_PATH, RESULTS_PATH, DATA_PATH, MODEL_PATH, LABEL_COLUMN, TEXT_COLUMN, TASK_IDS
+from config import LABEL_COLUMN, TEXT_COLUMN, TASK_IDS
 # import warnings filter
 from warnings import simplefilter
 # ignore all future warnings
 simplefilter(action='ignore', category=(FutureWarning, UserWarning))
 
 from IPython.display import display
+
 
 def compute_metrics(pred):
     """
@@ -80,8 +49,6 @@ def train_and_evaluate(model_type: Model.REDE_BERT, epochs=3, batch_size=1, trai
     The resulting metrics are saved as CSV to a given path
     :param model_type: The type of model to use
     :param epochs: The amount of epochs to train
-    :param folds: The amount of folds to use for k-fold cross validation
-    :param path: The path to save the results to
     :return evaluation_results: The results of the evaluation of the trained model
     """
     max_length = 512
@@ -121,13 +88,10 @@ def train_and_evaluate(model_type: Model.REDE_BERT, epochs=3, batch_size=1, trai
         warmup_steps=500,  # number of warmup steps for learning rate scheduler
         weight_decay=0.01,  # strength of weight decay
         logging_dir='./logs',  # directory for storing logs
-        #load_best_model_at_end=True,  # load the best model when finished training (default metric is loss)
-        # but you can specify `metric_for_best_model` argument to change to accuracy or other metric
         save_total_limit=10,
         save_strategy="epoch",
         logging_strategy="epoch",
         evaluation_strategy="no",  # evaluate each `logging_steps`
-        #metric_for_best_model="macro_f1",
         disable_tqdm=False,
     )
 
@@ -138,6 +102,7 @@ def train_and_evaluate(model_type: Model.REDE_BERT, epochs=3, batch_size=1, trai
         eval_dataset=test_dataset,  # evaluation dataset
         compute_metrics=compute_metrics,  # the callback that computes metrics of interest
     )
+
     if train:
         trainer.train()
         trainer.save_model(output_dir='./results4/'+model.__str__()+"/"+str([t.value[0] if isinstance(t.value, Tuple) else t.value for t in task_list]))
@@ -173,9 +138,9 @@ if __name__ == "__main__":
     transformers.logging.set_verbosity_error()
     current_results = {}
 
-    models = [Model.REDE_BERT] #, Model.INTER_VUA]
-    tasks = [TaskType.SEQ_CLASSIFICATION] #, TaskType.SOFT_LABEL_REGRESSION]
-    task_weights = None#[1, 0.1]
+    models = [Model.REDE_BERT, Model.INTER_VUA]
+    tasks = [TaskType.SEQ_CLASSIFICATION, TaskType.SOFT_LABEL_REGRESSION]
+    task_weights = [1, 0.1]
     for model in models:
         print(model.__str__(), tasks)
         if model == Model.REDE_BERT:
@@ -183,14 +148,5 @@ if __name__ == "__main__":
         else:
             result = train_and_evaluate(model_type=model, task_list=tasks, task_weights=task_weights, epochs=EPOCHS)
         current_results[model] = result
-    """
-    models = [Model.INTER_VUA]
-    tasks = [TaskType.SEQ_CLASSIFICATION, TaskType.SOFT_LABEL_REGRESSION, TaskType.EMOTION_REGRESSION]
-    task_weights = [1, 0.1, 0.1]
-    for model in models:
-        print(model.__str__(), tasks)
-        result = train_and_evaluate(model_type=model, task_list=tasks, task_weights=task_weights, epochs=EPOCHS)
-        current_results[model] = result
-    """
     utils.save_results("results3", current_results)
 

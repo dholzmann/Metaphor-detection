@@ -1,44 +1,18 @@
-import re
-import os
-import csv
-import ast
-import math
-import copy
-import glob
-import json
-import deepl
-import random
-import numpy as np
-import pandas as pd
 from enum import Enum
-import matplotlib.pyplot as plt
-
-from config import ROOT_PATH, RESULTS_PATH, DATA_PATH, MODEL_PATH
-
-from sklearn.linear_model import LinearRegression, Lasso
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
-from sklearn.metrics import accuracy_score, f1_score, log_loss, classification_report
-
-from statsmodels.tsa.stattools import adfuller, acf, pacf
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.tsa.arima_model import ARIMA
-
-import torch
-import torch.nn as nn
+from config import ROOT_PATH
 import torch.nn.functional as F
-from torch.autograd import Variable
-
 from transformers.models.bert.modeling_bert import *
-from transformers.modeling_outputs import SequenceClassifierOutput
-from transformers.utils.dummy_tf_objects import TFDPRQuestionEncoder
-from transformers import AutoConfig, AutoModel, AutoModelForSequenceClassification, AutoTokenizer, BertForSequenceClassification, BertModel, Trainer, TrainingArguments
-
+from transformers import AutoModel, AutoTokenizer
 # import warnings filter
 from warnings import simplefilter
 # ignore all future warnings
 simplefilter(action='ignore', category=(FutureWarning, UserWarning))
-
+"""
+The code has been implemented with the help of following sources:
+https://github.com/fornaciari/soft-labels.git
+https://towardsdatascience.com/how-to-create-and-train-a-multi-task-transformer-model-18c54a146240
+https://colab.research.google.com/github/zphang/zphang.github.io/blob/master/files/notebooks/Multi_task_Training_with_Transformers_NLP.ipynb
+"""
 
 class KLregular(nn.Module):
     def __init__(self, device='cuda:0'):
@@ -229,8 +203,8 @@ class MultiTaskModelBERT(nn.Module):
 
         return outputs
 
+
 class SequenceClassificationHead(nn.Module):
-    # https://towardsdatascience.com/how-to-create-and-train-a-multi-task-transformer-model-18c54a146240
     def __init__(self, hidden_size, num_labels, loss_func=FocalLoss(), dropout_p=0.1):
         super().__init__()
         self.loss_function = loss_func
@@ -249,14 +223,10 @@ class SequenceClassificationHead(nn.Module):
         if labels is not None:
             if labels.dim() != 1:
                 # Remove padding
-                #labels = labels[:, 0]
                 labels = labels[:, :, 0]
             loss = self.loss_function(
                 logits.view(-1, self.num_labels), labels.view(-1)
             )
-            #self.loss_function(
-            #    logits.view(-1, self.num_labels), labels
-            #)
 
         return logits, loss
 
@@ -267,16 +237,12 @@ class SequenceClassificationHead(nn.Module):
 
 
 class SoftLabelHead(nn.Module):
-    # https://github.com/fornaciari/soft-labels
     def __init__(self, hidden_size, num_labels, num_layers=1, loss_func=KLinverse(), dropout_p=0.1, device='cuda:0'):
         super().__init__()
         self.num_layers = num_layers
         self.loss_function = loss_func
         self.num_labels = num_labels
         self.dropout = nn.Dropout(dropout_p)
-
-        #layersizes_soft = [(hidden_size if i == 1 else int( hidden_size * ((num_layers - i + 1) / (hidden_size))), int(hidden_size * ((hidden_size - i) / (hidden_size))) if i != ( hidden_size) else self.num_labels) for i in range(1, hidden_size + 1)]
-        #self.fc_layers_soft = nn.ModuleList(nn.Linear(layersizes_soft[il][0], layersizes_soft[il][1]) for il in range(num_layers)).to(device=device)
         self.classifier = nn.Linear(hidden_size, num_labels)
         self._init_weights()
 
@@ -284,8 +250,6 @@ class SoftLabelHead(nn.Module):
         pooled_output = pooled_output.to("cuda:0")
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
-        #for layer_soft in self.fc_layers_soft:
-        #    logits = layer_soft(logits)
         logits = F.softmax(logits, dim=1)
 
         loss = None
@@ -293,7 +257,6 @@ class SoftLabelHead(nn.Module):
             if labels.dim() != 1:
                 # Remove padding
                 labels = labels[:, :, 0]
-
             loss = self.loss_function(
                 logits.view(-1, self.num_labels), labels.view(-1)
             )
